@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Техника упражнения</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: var(--tg-theme-bg-color, #ffffff);
+            color: var(--tg-theme-text-color, #000000);
+            padding: 16px;
+            line-height: 1.6;
+        }
+        
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 24px;
+        }
+        
+        .header h1 {
+            font-size: 24px;
+            font-weight: 700;
+            color: var(--tg-theme-text-color, #000000);
+            margin-bottom: 8px;
+        }
+        
+        .exercise-name {
+            font-size: 20px;
+            font-weight: 600;
+            color: var(--tg-theme-hint-color, #999999);
+            margin-bottom: 20px;
+        }
+        
+        .image-gallery {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 12px;
+            margin-bottom: 24px;
+        }
+        
+        .image-item {
+            position: relative;
+            border-radius: 12px;
+            overflow: hidden;
+            aspect-ratio: 1;
+            background: var(--tg-theme-secondary-bg-color, #f0f0f0);
+        }
+        
+        .image-item img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        
+        .section {
+            margin-bottom: 24px;
+            padding: 16px;
+            background: var(--tg-theme-secondary-bg-color, #f5f5f5);
+            border-radius: 12px;
+        }
+        
+        .section-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 12px;
+            color: var(--tg-theme-text-color, #000000);
+        }
+        
+        .technique-steps {
+            list-style: none;
+            counter-reset: step-counter;
+        }
+        
+        .technique-steps li {
+            counter-increment: step-counter;
+            margin-bottom: 12px;
+            padding-left: 32px;
+            position: relative;
+        }
+        
+        .technique-steps li::before {
+            content: counter(step-counter);
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 24px;
+            height: 24px;
+            background: var(--tg-theme-button-color, #3390ec);
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            font-size: 14px;
+        }
+        
+        .tips-list {
+            list-style: none;
+        }
+        
+        .tips-list li {
+            margin-bottom: 8px;
+            padding-left: 24px;
+            position: relative;
+        }
+        
+        .tips-list li::before {
+            content: "💡";
+            position: absolute;
+            left: 0;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: var(--tg-theme-hint-color, #999999);
+        }
+        
+        .error {
+            text-align: center;
+            padding: 40px;
+            color: #ff3333;
+        }
+        
+        .back-button {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--tg-theme-button-color, #3390ec);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 24px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+        
+        .back-button:active {
+            transform: translateX(-50%) scale(0.95);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div id="loading" class="loading">Загрузка техники упражнения...</div>
+        <div id="error" class="error" style="display: none;"></div>
+        <div id="content" style="display: none;">
+            <div class="header">
+                <h1>📖 Техника выполнения</h1>
+                <div class="exercise-name" id="exerciseName"></div>
+            </div>
+            
+            <div id="imageGallery" class="image-gallery"></div>
+            
+            <div class="section">
+                <div class="section-title">📝 Правила выполнения</div>
+                <ol class="technique-steps" id="techniqueSteps"></ol>
+            </div>
+            
+            <div class="section" id="tipsSection" style="display: none;">
+                <div class="section-title">💡 Советы</div>
+                <ul class="tips-list" id="tipsList"></ul>
+            </div>
+            
+            <div class="section" id="weightSection" style="display: none;">
+                <div class="section-title">⚖️ Рекомендуемый вес</div>
+                <div id="recommendedWeight"></div>
+            </div>
+        </div>
+    </div>
+    
+    <button class="back-button" onclick="closeApp()">🔙 Назад</button>
+    
+    <script>
+        let tg = window.Telegram.WebApp;
+        tg.ready();
+        tg.expand();
+        
+        function closeApp() {
+            tg.close();
+        }
+        
+        // Получаем данные из URL параметров
+        const urlParams = new URLSearchParams(window.location.search);
+        const exerciseName = urlParams.get('name');
+        const exerciseDataParam = urlParams.get('data');
+        
+        let exerciseData = null;
+        
+        // Парсим данные упражнения
+        if (exerciseDataParam) {
+            try {
+                exerciseData = JSON.parse(decodeURIComponent(exerciseDataParam));
+            } catch (e) {
+                console.error('Ошибка парсинга данных:', e);
+            }
+        }
+        
+        // Если данных нет, пытаемся получить через API (если есть)
+        async function loadExerciseData() {
+            if (exerciseData) {
+                displayExercise(exerciseData);
+                return;
+            }
+            
+            if (!exerciseName) {
+                showError('Название упражнения не указано');
+                return;
+            }
+            
+            // Пробуем получить данные через API (если доступен)
+            try {
+                const apiUrl = `/api/webapp/exercise-technique?name=${encodeURIComponent(exerciseName)}`;
+                const response = await fetch(apiUrl);
+                
+                if (!response.ok) {
+                    throw new Error('Ошибка загрузки данных');
+                }
+                
+                const data = await response.json();
+                if (data.error) {
+                    throw new Error(data.error);
+                }
+                
+                displayExercise(data);
+            } catch (error) {
+                console.error('Ошибка загрузки данных:', error);
+                showError('Не удалось загрузить технику упражнения');
+            }
+        }
+        
+        function displayExercise(data) {
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('content').style.display = 'block';
+            
+            // Название упражнения
+            if (data.name) {
+                document.getElementById('exerciseName').textContent = data.name;
+            }
+            
+            // Техника выполнения
+            const techniqueSteps = document.getElementById('techniqueSteps');
+            techniqueSteps.innerHTML = '';
+            if (data.technique_steps && data.technique_steps.length > 0) {
+                data.technique_steps.forEach(step => {
+                    const li = document.createElement('li');
+                    li.textContent = step;
+                    techniqueSteps.appendChild(li);
+                });
+            } else if (data.technique) {
+                // Если техника передана как строка, разбиваем по переносу строки
+                const steps = data.technique.split('\n').filter(s => s.trim());
+                steps.forEach(step => {
+                    const li = document.createElement('li');
+                    li.textContent = step.trim();
+                    techniqueSteps.appendChild(li);
+                });
+            } else {
+                const li = document.createElement('li');
+                li.textContent = 'Техника выполнения не указана';
+                techniqueSteps.appendChild(li);
+            }
+            
+            // Советы
+            if (data.tips && data.tips.length > 0) {
+                const tipsList = document.getElementById('tipsList');
+                tipsList.innerHTML = '';
+                data.tips.forEach(tip => {
+                    const li = document.createElement('li');
+                    li.textContent = tip;
+                    tipsList.appendChild(li);
+                });
+                document.getElementById('tipsSection').style.display = 'block';
+            } else if (data.tips_text) {
+                const tipsList = document.getElementById('tipsList');
+                tipsList.innerHTML = '';
+                const tips = data.tips_text.split('\n').filter(s => s.trim());
+                tips.forEach(tip => {
+                    const li = document.createElement('li');
+                    li.textContent = tip.trim();
+                    tipsList.appendChild(li);
+                });
+                document.getElementById('tipsSection').style.display = 'block';
+            }
+            
+            // Рекомендуемый вес
+            if (data.recommended_weight) {
+                document.getElementById('recommendedWeight').textContent = data.recommended_weight;
+                document.getElementById('weightSection').style.display = 'block';
+            }
+            
+            // Информация об упражнении (подходы, повторения, отдых)
+            let infoText = '';
+            if (data.sets) infoText += `Подходы: ${data.sets} | `;
+            if (data.reps) infoText += `Повторения: ${data.reps} | `;
+            if (data.rest) infoText += `Отдых: ${data.rest}`;
+            if (infoText) {
+                const infoSection = document.createElement('div');
+                infoSection.className = 'section';
+                infoSection.innerHTML = `<div class="section-title">📊 Параметры</div><div>${infoText}</div>`;
+                document.getElementById('content').insertBefore(infoSection, document.getElementById('tipsSection'));
+            }
+            
+            // Изображения (если есть)
+            if (data.images && data.images.length > 0) {
+                const imageGallery = document.getElementById('imageGallery');
+                imageGallery.innerHTML = '';
+                data.images.forEach(imageUrl => {
+                    const div = document.createElement('div');
+                    div.className = 'image-item';
+                    const img = document.createElement('img');
+                    img.src = imageUrl;
+                    img.alt = data.name || 'Техника упражнения';
+                    img.onerror = function() {
+                        this.style.display = 'none';
+                    };
+                    div.appendChild(img);
+                    imageGallery.appendChild(div);
+                });
+            } else {
+                // Показываем placeholder если нет изображений
+                const imageGallery = document.getElementById('imageGallery');
+                imageGallery.innerHTML = '<div class="image-item" style="display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; font-size: 14px; text-align: center; padding: 20px;">Изображение упражнения будет добавлено позже</div>';
+            }
+        }
+        
+        function showError(message) {
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('error').style.display = 'block';
+            document.getElementById('error').textContent = message;
+        }
+        
+        // Загружаем данные при загрузке страницы
+        loadExerciseData();
+    </script>
+</body>
+</html>
